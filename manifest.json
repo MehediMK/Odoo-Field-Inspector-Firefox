@@ -1,0 +1,33 @@
+{
+  "manifest_version": 3,
+  "name": "Odoo Field Inspector",
+  "version": "1.0.0",
+  "description": "Inspect Odoo form fields & list columns: CSS selector, XPath, technical field name, and live ir.model.fields data.",
+  "action": {
+    "default_popup": "popup/popup.html",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "32": "icons/icon32.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    },
+    "default_title": "Odoo Field Inspector"
+  },
+  "icons": {
+    "16": "icons/icon16.png",
+    "32": "icons/icon32.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "background": {
+    "scripts": ["background.js"],
+    "service_worker": "background.js"
+  },
+  "permissions": ["storage", "activeTab", "scripting"],
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "odoo-field-inspector@mehedimk.github.io",
+      "strict_min_version": "109.0"
+    }
+  }
+}

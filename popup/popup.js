@@ -76,14 +76,37 @@ async function ensureInjected(tabId) {
   const alreadyThere = await pingTab(tabId);
   if (alreadyThere) return true;
 
+  let results;
   try {
-    await api.scripting.executeScript({ target: { tabId }, files: CONTENT_FILES });
-    return true;
+    results = await api.scripting.executeScript({ target: { tabId }, files: CONTENT_FILES });
   } catch (err) {
     console.error("[Field Inspector] executeScript failed:", err);
     lastError = err;
     return false;
   }
+
+  // executeScript's own promise resolving doesn't guarantee every injected
+  // file ran cleanly — a thrown error inside one of them can surface here
+  // as a per-frame `error` instead of a rejection, silently leaving the
+  // rest of the file (e.g. content.js's onMessage listener) unregistered.
+  const failed = Array.isArray(results) ? results.find((r) => r && r.error) : null;
+  if (failed) {
+    const detail = failed.error && failed.error.message ? failed.error.message : String(failed.error);
+    console.error("[Field Inspector] a content script threw during injection:", failed.error);
+    lastError = new Error(`content script error: ${detail}`);
+    return false;
+  }
+
+  // Belt-and-suspenders: confirm the listener is actually there before
+  // telling the caller injection succeeded, since a silent per-file failure
+  // (above) isn't the only way it could end up unregistered.
+  const listening = await pingTab(tabId);
+  if (!listening) {
+    lastError = new Error("content script injected but did not respond to PING (its onMessage listener never registered)");
+    return false;
+  }
+
+  return true;
 }
 
 function setStatusText(text, isError) {

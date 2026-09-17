@@ -1644,3 +1644,9 @@
 
   window.__FI__.ui = ui;
 })();
+
+// Firefox's scripting.executeScript clones each file's top-level completion
+// value and throws "Script result is non-structured-clonable data" if it
+// can't — force it to a guaranteed-cloneable value regardless of what the
+// IIFE above implicitly evaluates to.
+void 0;

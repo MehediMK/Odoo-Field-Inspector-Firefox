@@ -1,10 +1,14 @@
 /**
  * Field Inspector - popup controller
  *
- * Reads/writes preferences via chrome.storage.local and drives the
- * per-tab content script via chrome.tabs.sendMessage, injecting it
- * on demand (activeTab + scripting) the first time it's needed.
+ * Reads/writes preferences via storage.local and drives the per-tab
+ * content script via tabs.sendMessage, injecting it on demand
+ * (activeTab + scripting) the first time it's needed.
  */
+
+// Firefox doesn't alias every namespace (e.g. `scripting`) onto `chrome.*`,
+// only `browser.*` is guaranteed complete — prefer it where present.
+const api = typeof browser !== "undefined" ? browser : chrome;
 
 const DEFAULT_SETTINGS = {
   formView: true,
@@ -26,37 +30,34 @@ function isRestrictedUrl(url) {
   return (
     url.startsWith("chrome://") ||
     url.startsWith("chrome-extension://") ||
+    url.startsWith("moz-extension://") ||
     url.startsWith("edge://") ||
     url.startsWith("about:") ||
     url.startsWith("https://chrome.google.com/webstore") ||
-    url.startsWith("https://chromewebstore.google.com")
+    url.startsWith("https://chromewebstore.google.com") ||
+    url.startsWith("https://addons.mozilla.org")
   );
 }
 
 async function getActiveTab() {
-  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  const [tab] = await api.tabs.query({ active: true, currentWindow: true });
   return tab || null;
 }
 
 async function loadSettings() {
-  const stored = await chrome.storage.local.get("fiSettings");
+  const stored = await api.storage.local.get("fiSettings");
   return { ...DEFAULT_SETTINGS, ...(stored.fiSettings || {}) };
 }
 
 async function saveSettings(settings) {
-  await chrome.storage.local.set({ fiSettings: settings });
+  await api.storage.local.set({ fiSettings: settings });
 }
 
+// Promise-only form: `browser.tabs.sendMessage` (Firefox) doesn't support a
+// callback argument the way `chrome.tabs.sendMessage` does, so a callback +
+// `chrome.runtime.lastError` here would silently never resolve on Firefox.
 function sendToTab(tabId, message) {
-  return new Promise((resolve, reject) => {
-    chrome.tabs.sendMessage(tabId, message, (response) => {
-      if (chrome.runtime.lastError) {
-        reject(new Error(chrome.runtime.lastError.message));
-        return;
-      }
-      resolve(response);
-    });
-  });
+  return api.tabs.sendMessage(tabId, message);
 }
 
 async function pingTab(tabId) {
@@ -73,8 +74,8 @@ async function ensureInjected(tabId) {
   if (alreadyThere) return true;
 
   try {
-    await chrome.scripting.insertCSS({ target: { tabId }, files: CONTENT_CSS });
-    await chrome.scripting.executeScript({ target: { tabId }, files: CONTENT_FILES });
+    await api.scripting.insertCSS({ target: { tabId }, files: CONTENT_CSS });
+    await api.scripting.executeScript({ target: { tabId }, files: CONTENT_FILES });
     return true;
   } catch (err) {
     console.error("[Field Inspector] injection failed:", err);
@@ -171,7 +172,7 @@ async function init() {
   els.version = document.getElementById("fp-version");
 
   try {
-    const manifest = chrome.runtime.getManifest();
+    const manifest = api.runtime.getManifest();
     els.version.textContent = `v${manifest.version}`;
   } catch (err) {
     /* non-fatal */

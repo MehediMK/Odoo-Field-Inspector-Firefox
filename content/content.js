@@ -18,6 +18,10 @@
   window.__FI__ = window.__FI__ || {};
   window.__FI__.__contentLoaded__ = true;
 
+  // Firefox doesn't alias every namespace onto `chrome.*` in every version —
+  // prefer `browser.*` (guaranteed complete, promise-based) where present.
+  const api = typeof browser !== "undefined" ? browser : chrome;
+
   const { utils, detector, ui } = window.__FI__;
 
   const DEFAULT_SETTINGS = {
@@ -55,7 +59,7 @@
   ui.onDisable = () => disable();
   ui.onOptionSetting = (key, value) => {
     updateSettings({ [key]: value });
-    chrome.storage.local.set({ fiSettings: state.settings }).catch((err) => {
+    api.storage.local.set({ fiSettings: state.settings }).catch((err) => {
       console.error("[Field Inspector] could not save settings:", err);
     });
   };
@@ -203,7 +207,7 @@
 
   function notifyBackground(enabled) {
     try {
-      chrome.runtime.sendMessage({ type: "FI_STATE_CHANGED", enabled });
+      api.runtime.sendMessage({ type: "FI_STATE_CHANGED", enabled });
     } catch (err) {
       // Extension context may be invalidated (e.g. extension reloaded); ignore.
     }
@@ -260,7 +264,7 @@
     }
   }
 
-  chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  api.runtime.onMessage.addListener((message, sender, sendResponse) => {
     try {
       if (!message || typeof message.type !== "string") return false;
 

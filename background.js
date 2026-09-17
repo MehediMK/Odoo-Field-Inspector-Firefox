@@ -12,16 +12,20 @@
  * content script for badge bookkeeping.
  */
 
+// Firefox doesn't alias every namespace (e.g. `scripting`) onto `chrome.*`,
+// only `browser.*` is guaranteed complete — prefer it where present.
+const api = typeof browser !== "undefined" ? browser : chrome;
+
 const tabEnabledState = new Map();
 
 function setBadge(tabId, enabled) {
-  chrome.action.setBadgeText({ tabId, text: enabled ? "ON" : "" }).catch(() => {});
+  api.action.setBadgeText({ tabId, text: enabled ? "ON" : "" }).catch(() => {});
   if (enabled) {
-    chrome.action.setBadgeBackgroundColor({ tabId, color: "#16a34a" }).catch(() => {});
+    api.action.setBadgeBackgroundColor({ tabId, color: "#16a34a" }).catch(() => {});
   }
 }
 
-chrome.runtime.onMessage.addListener((message, sender) => {
+api.runtime.onMessage.addListener((message, sender) => {
   try {
     if (!message || typeof message.type !== "string") return;
 
@@ -37,11 +41,11 @@ chrome.runtime.onMessage.addListener((message, sender) => {
   return false;
 });
 
-chrome.tabs.onRemoved.addListener((tabId) => {
+api.tabs.onRemoved.addListener((tabId) => {
   tabEnabledState.delete(tabId);
 });
 
-chrome.tabs.onUpdated.addListener((tabId, changeInfo) => {
+api.tabs.onUpdated.addListener((tabId, changeInfo) => {
   if (changeInfo.status === "loading") {
     // A full navigation destroys the previously injected content script;
     // the inspector always starts OFF on a freshly loaded page.
@@ -50,6 +54,6 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo) => {
   }
 });
 
-chrome.runtime.onInstalled.addListener(() => {
+api.runtime.onInstalled.addListener(() => {
   console.log("[Field Inspector] installed/updated. Click the toolbar icon to open the popup and enable inspection.");
 });

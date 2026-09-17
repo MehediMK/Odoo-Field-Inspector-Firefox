@@ -18,12 +18,15 @@ const DEFAULT_SETTINGS = {
   odooMode: true,
 };
 
-const CONTENT_FILES = ["content/utils.js", "content/odoo.js", "content/detector.js", "content/ui.js", "content/domain.js", "content/domain-builder.js", "content/chatter.js", "content/content.js"];
-const CONTENT_CSS = ["content.css"];
+// content/inject-css.js goes first: it fetches and injects content.css as a
+// <style> tag itself, since Firefox's `scripting.insertCSS` doesn't reliably
+// honor the `activeTab` grant the way `scripting.executeScript` does.
+const CONTENT_FILES = ["content/inject-css.js", "content/utils.js", "content/odoo.js", "content/detector.js", "content/ui.js", "content/domain.js", "content/domain-builder.js", "content/chatter.js", "content/content.js"];
 
 const els = {};
 let activeTab = null;
 let restricted = false;
+let lastError = null;
 
 function isRestrictedUrl(url) {
   if (!url) return true;
@@ -74,11 +77,11 @@ async function ensureInjected(tabId) {
   if (alreadyThere) return true;
 
   try {
-    await api.scripting.insertCSS({ target: { tabId }, files: CONTENT_CSS });
     await api.scripting.executeScript({ target: { tabId }, files: CONTENT_FILES });
     return true;
   } catch (err) {
-    console.error("[Field Inspector] injection failed:", err);
+    console.error("[Field Inspector] executeScript failed:", err);
+    lastError = err;
     return false;
   }
 }
@@ -86,6 +89,13 @@ async function ensureInjected(tabId) {
 function setStatusText(text, isError) {
   els.statusText.textContent = text;
   els.statusText.classList.toggle("fp-disabled-note", !!isError);
+}
+
+// Surfaces the real thrown error in the popup itself, so diagnosing a
+// failed start doesn't require opening the browser console.
+function describeStartFailure(err) {
+  const detail = err && err.message ? err.message : String(err || "unknown error");
+  return `Could not start on this page: ${detail}`;
 }
 
 function setControlsEnabled(enabled) {
@@ -115,11 +125,13 @@ async function onEnableToggleChange() {
   const settings = await loadSettings();
 
   if (els.enableToggle.checked) {
+    console.log("[Field Inspector] enabling on tab", activeTab.id, activeTab.url);
     setStatusText("Starting inspector…");
+    lastError = null;
     const ok = await ensureInjected(activeTab.id);
     if (!ok) {
       els.enableToggle.checked = false;
-      setStatusText("Could not start on this page.", true);
+      setStatusText(describeStartFailure(lastError), true);
       return;
     }
     try {
@@ -127,8 +139,9 @@ async function onEnableToggleChange() {
       setStatusText("Inspector active — click a field on the page.");
       setControlsEnabled(true);
     } catch (err) {
+      console.error("[Field Inspector] FI_ENABLE message failed:", err);
       els.enableToggle.checked = false;
-      setStatusText("Could not start on this page.", true);
+      setStatusText(describeStartFailure(err), true);
     }
   } else {
     try {
